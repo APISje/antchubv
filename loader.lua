@@ -1,392 +1,518 @@
 --[[
-    ANTC HUB - Feature Loader
-    Memuat fitur-fitur secara dinamis tanpa perlu edit main.lua
+    ╔═══════════════════════════════════════════════════════════╗
+    ║                     ANTC HUB LOADER                       ║
+    ║              Discord: https://discord.gg/antchub          ║
+    ╚═══════════════════════════════════════════════════════════╝
 ]]
 
-local Loader = {}
-Loader.Features = {}
-Loader.Config = {
-    Version = "1.0.0",
-    UpdateURL = "https://raw.githubusercontent.com/YOUR_USERNAME/antc-hub/main/features.lua",
-    AutoUpdate = true,
-    Cache = {},
-    CheckInterval = 300
-}
+print("🔄 Loading ANTC HUB...")
 
-function Loader:Init(UI, config)
-    self.UI = UI
-    self.Initialized = true
-    
-    if config then
-        if config.UpdateURL then
-            self.Config.UpdateURL = config.UpdateURL
-        end
-        if config.AutoUpdate ~= nil then
-            self.Config.AutoUpdate = config.AutoUpdate
-        end
-        if config.CheckInterval then
-            self.Config.CheckInterval = config.CheckInterval
-        end
+-- Load WindUI Library
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/APISje/antchubv/refs/heads/main/main.lua", true))()
+
+print("✅ ANTC HUB Library Loaded!")
+
+-- Buat Window
+local Window = WindUI:CreateWindow({
+    Title = "ANTC HUB",
+    Icon = "rbxassetid://10723415766",
+    Author = "ANTC Team",
+    Folder = "ANTCHub_Data",
+    Size = UDim2.fromOffset(580, 460),
+    KeySystem = false,
+    Transparent = true,
+    Theme = "Dark",
+    SideBarWidth = 170,
+    HasOutline = true
+})
+
+print("✅ Window Created!")
+
+-- ==================== FITUR HELPER FUNCTIONS ====================
+local Player = game.Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Variables untuk track fitur
+local activeConnections = {}
+local savedPosition = nil
+
+-- Helper: Cleanup connection
+local function cleanupConnection(name)
+    if activeConnections[name] then
+        activeConnections[name]:Disconnect()
+        activeConnections[name] = nil
     end
-    
-    print("[ANTC HUB] Loader initialized v" .. self.Config.Version)
-    
-    if self.Config.AutoUpdate then
-        self:StartAutoUpdate()
-    end
-    
-    return self
 end
 
-function Loader:StartAutoUpdate()
-    print("[ANTC HUB] Auto-update enabled, checking for features...")
-    
-    spawn(function()
-        while self.Config.AutoUpdate and wait(self.Config.CheckInterval) do
-            self:CheckForUpdates()
-        end
-    end)
-    
-    self:CheckForUpdates()
-end
+-- ==================== TAB PLAYER ====================
+local PlayerTab = Window:Tab({
+    Title = "Player",
+    Icon = "rbxassetid://10734950309"
+})
 
-function Loader:CheckForUpdates()
-    local success, features = self:LoadFromURL(self.Config.UpdateURL)
-    
-    if success and features then
-        print("[ANTC HUB] Features ditemukan, memuat...")
-        
-        if type(features) == "function" then
-            local execSuccess, result = pcall(features, self)
-            if execSuccess then
-                print("[ANTC HUB] Features berhasil dimuat dan dieksekusi")
-                self:Notify({
-                    Title = "ANTC HUB",
-                    Content = "Features berhasil dimuat!",
-                    Duration = 3,
-                    Icon = "check-circle"
-                })
-            else
-                warn("[ANTC HUB] Error saat eksekusi features: " .. tostring(result))
-            end
-        elseif type(features) == "table" then
-            for name, feature in pairs(features) do
-                if type(feature) == "function" then
-                    self:LoadFeature(name, feature)
+local PlayerSection = PlayerTab:Section({
+    Title = "Movement"
+})
+
+-- WalkSpeed Slider
+PlayerSection:Slider({
+    Title = "WalkSpeed",
+    Description = "Ubah kecepatan jalan",
+    Default = 16,
+    Min = 16,
+    Max = 500,
+    Callback = function(value)
+        if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+            Player.Character.Humanoid.WalkSpeed = value
+        end
+    end
+})
+
+-- JumpPower Slider
+PlayerSection:Slider({
+    Title = "JumpPower",
+    Description = "Ubah kekuatan lompat",
+    Default = 50,
+    Min = 50,
+    Max = 500,
+    Callback = function(value)
+        if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+            Player.Character.Humanoid.JumpPower = value
+        end
+    end
+})
+
+-- Fly Toggle
+PlayerSection:Toggle({
+    Title = "Fly",
+    Description = "Mode terbang (WASD + Space/Shift)",
+    Default = false,
+    Callback = function(enabled)
+        if enabled then
+            local char = Player.Character
+            if not char then return end
+            
+            local rootPart = char:FindFirstChild("HumanoidRootPart")
+            if not rootPart then return end
+            
+            local bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            bodyVelocity.Parent = rootPart
+            
+            local bodyGyro = Instance.new("BodyGyro")
+            bodyGyro.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+            bodyGyro.P = 9e4
+            bodyGyro.Parent = rootPart
+            
+            activeConnections.Fly = RunService.Heartbeat:Connect(function()
+                local camera = workspace.CurrentCamera
+                local moveDirection = Vector3.new(0, 0, 0)
+                
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                    moveDirection = moveDirection + camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                    moveDirection = moveDirection - camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                    moveDirection = moveDirection - camera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                    moveDirection = moveDirection + camera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                    moveDirection = moveDirection + Vector3.new(0, 1, 0)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                    moveDirection = moveDirection - Vector3.new(0, 1, 0)
+                end
+                
+                bodyVelocity.Velocity = moveDirection.Unit * 50
+                bodyGyro.CFrame = camera.CFrame
+            end)
+            
+            Window:Notify({
+                Title = "Fly Mode",
+                Description = "✅ Enabled!",
+                Duration = 3
+            })
+        else
+            cleanupConnection("Fly")
+            
+            local char = Player.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                local rootPart = char.HumanoidRootPart
+                if rootPart:FindFirstChildOfClass("BodyVelocity") then
+                    rootPart:FindFirstChildOfClass("BodyVelocity"):Destroy()
+                end
+                if rootPart:FindFirstChildOfClass("BodyGyro") then
+                    rootPart:FindFirstChildOfClass("BodyGyro"):Destroy()
                 end
             end
+            
+            Window:Notify({
+                Title = "Fly Mode",
+                Description = "❌ Disabled",
+                Duration = 3
+            })
         end
     end
-end
+})
 
-function Loader:LoadFromURL(url)
-    local HttpService = game:GetService("HttpService")
-    local success, response = pcall(function()
-        return game:HttpGet(url)
-    end)
-    
-    if success and response then
-        local loadSuccess, loadedFunc = pcall(loadstring, response)
+-- Noclip Toggle
+PlayerSection:Toggle({
+    Title = "Noclip",
+    Description = "Tembus tembok",
+    Default = false,
+    Callback = function(enabled)
+        if enabled then
+            activeConnections.Noclip = RunService.Stepped:Connect(function()
+                local char = Player.Character
+                if char then
+                    for _, part in pairs(char:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.CanCollide = false
+                        end
+                    end
+                end
+            end)
+            
+            Window:Notify({
+                Title = "Noclip",
+                Description = "✅ Enabled!",
+                Duration = 3
+            })
+        else
+            cleanupConnection("Noclip")
+            
+            local char = Player.Character
+            if char then
+                for _, part in pairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                        part.CanCollide = true
+                    end
+                end
+            end
+            
+            Window:Notify({
+                Title = "Noclip",
+                Description = "❌ Disabled",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Infinite Jump Toggle
+PlayerSection:Toggle({
+    Title = "Infinite Jump",
+    Description = "Lompat tanpa batas",
+    Default = false,
+    Callback = function(enabled)
+        if enabled then
+            activeConnections.InfJump = UserInputService.JumpRequest:Connect(function()
+                if Player.Character and Player.Character:FindFirstChildOfClass("Humanoid") then
+                    Player.Character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end)
+            
+            Window:Notify({
+                Title = "Infinite Jump",
+                Description = "✅ Enabled!",
+                Duration = 3
+            })
+        else
+            cleanupConnection("InfJump")
+            
+            Window:Notify({
+                Title = "Infinite Jump",
+                Description = "❌ Disabled",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Visual Section
+local VisualSection = PlayerTab:Section({
+    Title = "Visual"
+})
+
+-- ESP Toggle
+local espHighlights = {}
+
+VisualSection:Toggle({
+    Title = "ESP",
+    Description = "Lihat player lewat tembok",
+    Default = false,
+    Callback = function(enabled)
+        if enabled then
+            for _, player in pairs(game.Players:GetPlayers()) do
+                if player ~= Player and player.Character then
+                    local highlight = Instance.new("Highlight")
+                    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    highlight.FillTransparency = 0.5
+                    highlight.OutlineTransparency = 0
+                    highlight.Parent = player.Character
+                    espHighlights[player] = highlight
+                end
+            end
+            
+            Window:Notify({
+                Title = "ESP",
+                Description = "✅ Enabled!",
+                Duration = 3
+            })
+        else
+            for _, highlight in pairs(espHighlights) do
+                if highlight then
+                    highlight:Destroy()
+                end
+            end
+            espHighlights = {}
+            
+            Window:Notify({
+                Title = "ESP",
+                Description = "❌ Disabled",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- FullBright Toggle
+local oldLighting = {}
+
+VisualSection:Toggle({
+    Title = "FullBright",
+    Description = "Terang penuh tanpa bayangan",
+    Default = false,
+    Callback = function(enabled)
+        local lighting = game:GetService("Lighting")
         
-        if loadSuccess and loadedFunc then
-            local execSuccess, result = pcall(loadedFunc)
-            if execSuccess then
-                print("[ANTC HUB] Berhasil memuat dari URL")
-                return true, result
-            else
-                warn("[ANTC HUB] Error eksekusi: " .. tostring(result))
+        if enabled then
+            oldLighting.Brightness = lighting.Brightness
+            oldLighting.Ambient = lighting.Ambient
+            oldLighting.OutdoorAmbient = lighting.OutdoorAmbient
+            
+            lighting.Brightness = 2
+            lighting.Ambient = Color3.fromRGB(255, 255, 255)
+            lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+            
+            Window:Notify({
+                Title = "FullBright",
+                Description = "✅ Enabled!",
+                Duration = 3
+            })
+        else
+            lighting.Brightness = oldLighting.Brightness or 1
+            lighting.Ambient = oldLighting.Ambient or Color3.fromRGB(0, 0, 0)
+            lighting.OutdoorAmbient = oldLighting.OutdoorAmbient or Color3.fromRGB(0, 0, 0)
+            
+            Window:Notify({
+                Title = "FullBright",
+                Description = "❌ Disabled",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- ==================== TAB COMBAT ====================
+local CombatTab = Window:Tab({
+    Title = "Combat",
+    Icon = "rbxassetid://10747373176"
+})
+
+local CombatSection = CombatTab:Section({
+    Title = "God Mode"
+})
+
+-- God Mode Toggle
+local godModeFF = nil
+
+CombatSection:Toggle({
+    Title = "God Mode",
+    Description = "HP unlimited (mungkin tidak work di semua game)",
+    Default = false,
+    Callback = function(enabled)
+        if enabled then
+            if Player.Character then
+                godModeFF = Instance.new("ForceField")
+                godModeFF.Visible = false
+                godModeFF.Parent = Player.Character
+                
+                local humanoid = Player.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    humanoid.MaxHealth = math.huge
+                    humanoid.Health = math.huge
+                end
+            end
+            
+            Window:Notify({
+                Title = "God Mode",
+                Description = "✅ Enabled!",
+                Duration = 3
+            })
+        else
+            if godModeFF then
+                godModeFF:Destroy()
+                godModeFF = nil
+            end
+            
+            local humanoid = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.MaxHealth = 100
+                humanoid.Health = 100
+            end
+            
+            Window:Notify({
+                Title = "God Mode",
+                Description = "❌ Disabled",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- ==================== TAB TELEPORT ====================
+local TeleportTab = Window:Tab({
+    Title = "Teleport",
+    Icon = "rbxassetid://10734896388"
+})
+
+local TeleportSection = TeleportTab:Section({
+    Title = "Position Manager"
+})
+
+-- Save Position Button
+TeleportSection:Button({
+    Title = "Save Position",
+    Description = "Simpan posisi sekarang",
+    Callback = function()
+        if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+            savedPosition = Player.Character.HumanoidRootPart.CFrame
+            Window:Notify({
+                Title = "ANTC HUB",
+                Description = "✅ Posisi tersimpan!",
+                Duration = 3
+            })
+        else
+            Window:Notify({
+                Title = "ANTC HUB",
+                Description = "❌ Gagal simpan posisi!",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Load Position Button
+TeleportSection:Button({
+    Title = "Load Position",
+    Description = "Kembali ke posisi tersimpan",
+    Callback = function()
+        if savedPosition then
+            if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+                Player.Character.HumanoidRootPart.CFrame = savedPosition
+                Window:Notify({
+                    Title = "ANTC HUB",
+                    Description = "✅ Teleport ke posisi tersimpan!",
+                    Duration = 3
+                })
             end
         else
-            warn("[ANTC HUB] Error loadstring: " .. tostring(loadedFunc))
+            Window:Notify({
+                Title = "ANTC HUB",
+                Description = "❌ Belum ada posisi tersimpan!",
+                Duration = 3
+            })
         end
-    else
-        warn("[ANTC HUB] Gagal HttpGet: " .. tostring(response))
     end
-    
-    return false, nil
-end
+})
 
-function Loader:LoadFeature(featureName, featureFunc)
-    if self.Features[featureName] then
-        warn("[ANTC HUB] Feature '" .. featureName .. "' sudah dimuat, akan di-overwrite")
-    end
-    
-    self.Features[featureName] = {
-        Name = featureName,
-        Func = featureFunc,
-        Loaded = false,
-        LastUpdate = os.time()
-    }
-    
-    print("[ANTC HUB] Feature '" .. featureName .. "' didaftarkan")
-    return self
-end
+-- ==================== TAB MISC ====================
+local MiscTab = Window:Tab({
+    Title = "Misc",
+    Icon = "rbxassetid://10734924532"
+})
 
-function Loader:ExecuteFeature(featureName, ...)
-    local feature = self.Features[featureName]
-    
-    if not feature then
-        warn("[ANTC HUB] Feature '" .. featureName .. "' tidak ditemukan")
-        return false
-    end
-    
-    local success, result = pcall(feature.Func, self.UI, self, ...)
-    
-    if success then
-        feature.Loaded = true
-        print("[ANTC HUB] Feature '" .. featureName .. "' berhasil dijalankan")
-        return true, result
-    else
-        warn("[ANTC HUB] Error pada feature '" .. featureName .. "': " .. tostring(result))
-        return false, result
-    end
-end
+local MiscSection = MiscTab:Section({
+    Title = "Utilities"
+})
 
-function Loader:CreateTab(tabName, tabIcon)
-    if not self.UI then
-        warn("[ANTC HUB] UI belum diinisialisasi")
-        return nil
+-- Anti AFK Toggle
+MiscSection:Toggle({
+    Title = "Anti AFK",
+    Description = "Mencegah kick karena AFK",
+    Default = false,
+    Callback = function(enabled)
+        if enabled then
+            local vu = game:GetService("VirtualUser")
+            activeConnections.AntiAFK = Player.Idled:Connect(function()
+                vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+                wait(1)
+                vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            end)
+            
+            Window:Notify({
+                Title = "Anti AFK",
+                Description = "✅ Enabled!",
+                Duration = 3
+            })
+        else
+            cleanupConnection("AntiAFK")
+            
+            Window:Notify({
+                Title = "Anti AFK",
+                Description = "❌ Disabled",
+                Duration = 3
+            })
+        end
     end
-    
-    local tab = self.UI:Tab({
-        Title = tabName,
-        Icon = tabIcon or "home"
-    })
-    
-    print("[ANTC HUB] Tab '" .. tabName .. "' dibuat")
-    return tab
-end
+})
 
-function Loader:AddButton(tab, buttonConfig)
-    if not tab then
-        warn("[ANTC HUB] Tab tidak valid")
-        return nil
+-- Reset Character Button
+MiscSection:Button({
+    Title = "Reset Character",
+    Description = "Reset karakter Anda",
+    Callback = function()
+        if Player.Character and Player.Character:FindFirstChildOfClass("Humanoid") then
+            Player.Character:FindFirstChildOfClass("Humanoid").Health = 0
+        end
     end
-    
-    local button = tab:Button({
-        Title = buttonConfig.Title or "Button",
-        Desc = buttonConfig.Desc or "",
-        Callback = buttonConfig.Callback or function() end
-    })
-    
-    return button
-end
+})
 
-function Loader:AddToggle(tab, toggleConfig)
-    if not tab then
-        warn("[ANTC HUB] Tab tidak valid")
-        return nil
-    end
-    
-    local toggle = tab:Toggle({
-        Title = toggleConfig.Title or "Toggle",
-        Desc = toggleConfig.Desc or "",
-        Default = toggleConfig.Default or false,
-        Callback = toggleConfig.Callback or function(value) end
-    })
-    
-    return toggle
-end
+-- Discord Section
+local DiscordSection = MiscTab:Section({
+    Title = "Community"
+})
 
-function Loader:AddSlider(tab, sliderConfig)
-    if not tab then
-        warn("[ANTC HUB] Tab tidak valid")
-        return nil
-    end
-    
-    local slider = tab:Slider({
-        Title = sliderConfig.Title or "Slider",
-        Desc = sliderConfig.Desc or "",
-        Min = sliderConfig.Min or 0,
-        Max = sliderConfig.Max or 100,
-        Default = sliderConfig.Default or 50,
-        Callback = sliderConfig.Callback or function(value) end
-    })
-    
-    return slider
-end
-
-function Loader:AddInput(tab, inputConfig)
-    if not tab then
-        warn("[ANTC HUB] Tab tidak valid")
-        return nil
-    end
-    
-    local input = tab:Input({
-        Title = inputConfig.Title or "Input",
-        Desc = inputConfig.Desc or "",
-        Placeholder = inputConfig.Placeholder or "",
-        Callback = inputConfig.Callback or function(value) end
-    })
-    
-    return input
-end
-
-function Loader:AddDropdown(tab, dropdownConfig)
-    if not tab then
-        warn("[ANTC HUB] Tab tidak valid")
-        return nil
-    end
-    
-    local dropdown = tab:Dropdown({
-        Title = dropdownConfig.Title or "Dropdown",
-        Desc = dropdownConfig.Desc or "",
-        Options = dropdownConfig.Options or {},
-        Default = dropdownConfig.Default,
-        Multi = dropdownConfig.Multi or false,
-        Callback = dropdownConfig.Callback or function(value) end
-    })
-    
-    return dropdown
-end
-
-function Loader:Notify(notifyConfig)
-    if not self.UI then
-        warn("[ANTC HUB] UI belum diinisialisasi")
-        return
-    end
-    
-    self.UI:Notify({
-        Title = notifyConfig.Title or "ANTC HUB",
-        Content = notifyConfig.Content or "",
-        Duration = notifyConfig.Duration or 5,
-        Icon = notifyConfig.Icon
-    })
-end
-
-function Loader:GetAllFeatures()
-    local featureList = {}
-    for name, feature in pairs(self.Features) do
-        table.insert(featureList, {
-            Name = name,
-            Loaded = feature.Loaded,
-            LastUpdate = feature.LastUpdate
+DiscordSection:Button({
+    Title = "Join Discord",
+    Description = "discord.gg/antchub",
+    Callback = function()
+        Window:Notify({
+            Title = "ANTC HUB",
+            Description = "Discord: discord.gg/antchub",
+            Duration = 5
         })
-    end
-    return featureList
-end
-
-function Loader:UnloadFeature(featureName)
-    if self.Features[featureName] then
-        self.Features[featureName] = nil
-        print("[ANTC HUB] Feature '" .. featureName .. "' dihapus")
-        return true
-    end
-    return false
-end
-
-function Loader:ReloadFeature(featureName)
-    local feature = self.Features[featureName]
-    if feature then
-        feature.Loaded = false
-        return self:ExecuteFeature(featureName)
-    end
-    return false
-end
-
-function Loader:SetConfig(configKey, value)
-    if self.Config[configKey] ~= nil then
-        local oldValue = self.Config[configKey]
-        self.Config[configKey] = value
-        print("[ANTC HUB] Config '" .. configKey .. "' diupdate")
         
-        if configKey == "UpdateURL" and oldValue ~= value and self.Initialized then
-            print("[ANTC HUB] UpdateURL changed, checking for updates...")
-            self:CheckForUpdates()
+        if setclipboard then
+            setclipboard("https://discord.gg/antchub")
         end
-        
-        if configKey == "AutoUpdate" and value == true and not oldValue and self.Initialized then
-            print("[ANTC HUB] AutoUpdate enabled, starting...")
-            self:StartAutoUpdate()
-        end
-        
-        return true
     end
-    return false
-end
+})
 
-function Loader:ManualRefresh()
-    print("[ANTC HUB] Manual refresh triggered")
-    return self:CheckForUpdates()
-end
+-- Notification
+Window:Notify({
+    Title = "ANTC HUB",
+    Description = "✅ Loaded successfully! Discord: discord.gg/antchub",
+    Duration = 5
+})
 
-function Loader:GetUI()
-    return self.UI
-end
-
-function Loader:CreateHub(WindUI, config)
-    config = config or {}
-    
-    local Window = WindUI:Create({
-        Title = config.Title or "ANTC HUB",
-        Author = config.Author or "ANTC",
-        Subtitle = config.Subtitle or "Advanced Script Hub v" .. self.Config.Version,
-        Icon = config.Icon or "shield",
-        Size = config.Size or UDim2.new(0, 560, 0, 580),
-        SizeTabbed = config.SizeTabbed or UDim2.new(0, 560, 0, 560),
-        Theme = config.Theme or "Dark",
-        Folder = config.Folder or "ANTC_HUB",
-        ShowOnStart = config.ShowOnStart or true,
-    })
-    
-    local loaderConfig = {
-        UpdateURL = config.LoaderURL,
-        AutoUpdate = config.AutoUpdate,
-        CheckInterval = config.CheckInterval
-    }
-    
-    self:Init(Window, loaderConfig)
-    
-    Window:Notify({
-        Title = "ANTC HUB",
-        Content = "Berhasil dimuat! Version " .. self.Config.Version,
-        Duration = 5,
-        Icon = "check-circle"
-    })
-    
-    return {
-        Window = Window,
-        Loader = self,
-        WindUI = WindUI,
-        Version = self.Config.Version,
-        
-        CreateTab = function(_, tabConfig)
-            return self:CreateTab(tabConfig.Title, tabConfig.Icon)
-        end,
-        
-        Notify = function(_, notifyConfig)
-            return self:Notify(notifyConfig)
-        end,
-        
-        LoadFeature = function(_, name, func)
-            return self:LoadFeature(name, func)
-        end,
-        
-        ExecuteFeature = function(_, name, ...)
-            return self:ExecuteFeature(name, ...)
-        end,
-        
-        GetFeatures = function(_)
-            return self:GetAllFeatures()
-        end,
-        
-        RefreshFeatures = function(_)
-            return self:ManualRefresh()
-        end,
-        
-        SetConfig = function(_, key, value)
-            return self:SetConfig(key, value)
-        end,
-        
-        SetTheme = function(_, theme)
-            Window:SetTheme(theme)
-        end,
-        
-        Destroy = function(_)
-            Window:Destroy()
-        end
-    }
-end
-
-print("[ANTC HUB] Loader module dimuat v" .. Loader.Config.Version)
-return Loader
+print("🎉 ANTC HUB Loaded Successfully!")
+print("📢 Discord: discord.gg/antchub")
