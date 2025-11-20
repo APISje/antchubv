@@ -1,20 +1,13 @@
---[[
-    .ANTC HUB - Premium Script
-    Versi Terbaru dengan Fitur Lengkap
-    Coded by: ANTC Development Team
-]]
 
-local WindUI
-
-do
+local ANTC HUB
     local ok, result = pcall(function()
         return require("./src/Init")
     end)
     
     if ok then
-        WindUI = result
+        ANTCUI = result
     else 
-        WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/APISje/antchubv/refs/heads/main/main.lua"))()
+        ANTCUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/APISje/antchubv/refs/heads/main/main.lua"))()
     end
 end
 
